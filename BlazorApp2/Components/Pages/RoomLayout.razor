@@ -1,0 +1,184 @@
+﻿@page "/chat"
+@inject NavigationManager Navigation
+@using Microsoft.AspNetCore.SignalR.Client
+@implements IAsyncDisposable
+@inject ISnackbar _snackbar;
+@inject ISeatRepo _seatRepo;
+@inject IHttpContextAccessor _httpContextAccessor;
+<MudText Align="Align.Center" Style="color:#F2FFFF" Class="mb-2">MÀN HÌNH</MudText>
+@* <MudGrid>
+    @foreach (var rowGroup in _lstSeat.GroupBy(x => x.Row).OrderBy(group => group.Key))
+    {
+        var rowGr = rowGroup.OrderBy(x => x.SeatColumn);
+
+        <MudItem xs="12" md="12">
+            <MudGrid>
+                <MudItem xs="1" md="1" Class="d-flex align-center justify-center text-center" Style="color:#F2FFFF">@rowGr.Select(x => x.Row).First()</MudItem>
+                <MudItem xs="10" md="10" Style="text-align:center">
+                    @foreach (var seat in rowGr)
+                    {
+
+                        @if (seat.Price != 0)
+                        {
+
+                            <MudButton Variant="GetButtonVariant(seat)" Color="GetButtonColor(seat)" Class="mx-1" OnClick="(() =>HandleSeatClick(seat))">
+                                @seat.Code
+                            </MudButton>
+                        }
+                        else
+                        {
+
+                            <MudButton Style="visibility:hidden;" Class="mx-1">
+                                @seat.Code
+                            </MudButton>
+                        }
+                    }
+                </MudItem>
+                <MudItem xs="1" md="1" Class="d-flex align-center justify-center text-center" Style="color:#F2FFFF">@rowGr.Select(x => x.Row).First()</MudItem>
+            </MudGrid>
+        </MudItem>
+    }
+</MudGrid> *@
+<MudDivider />
+<MudContainer MaxWidth="MaxWidth.Small">
+    <MudText Typo="Typo.h5" GutterBottom="true">Simple Chat</MudText>
+    <MudTextField @bind-Value="userName" Label="Name" Variant="Variant.Filled" />
+    <MudTextField @bind-Value="currentMessage" Label="Message" Variant="Variant.Filled" 
+                  Placeholder="Enter message..." Adornment="Adornment.End" 
+                  AdornmentIcon="@Icons.Material.Filled.Send" OnAdornmentClick="SendMessage" />
+    
+    <MudDivider />
+    <MudList T="string">
+        @foreach (var message in messages)
+        {
+            <MudListItem>@message</MudListItem>
+        }
+    </MudList>
+
+</MudContainer>
+
+@code {
+
+    private string userName;
+    private string currentMessage;
+    private List<string> messages = new();
+    private HubConnection? hubConnection;
+    List<Seat> _lstSeat = new();
+    protected override async Task OnInitializedAsync()
+    {
+        await GetAllSeat();
+        hubConnection = new HubConnectionBuilder()
+            .WithUrl(Navigation.ToAbsoluteUri("/chatHub"))
+            .Build();
+
+        hubConnection.On<string, string>("ReceiveMessage", (user, message) =>
+        {
+            var encodedMsg = $"{user}: {message}";
+            messages.Add(encodedMsg);
+            InvokeAsync(StateHasChanged);
+        });
+
+        await hubConnection.StartAsync();
+    }
+
+    private async Task SendMessage()
+    {
+        if (!string.IsNullOrEmpty(userName) && !string.IsNullOrEmpty(currentMessage))
+        {
+            await hubConnection.SendAsync("SendMessage", userName, currentMessage);
+            currentMessage = string.Empty;
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (hubConnection is not null)
+        {
+            await hubConnection.DisposeAsync();
+        }
+    }
+    async Task GetAllSeat()
+    {
+        _lstSeat = await _seatRepo.GetAllAsync();
+    }
+    // MudBlazor.Variant GetButtonVariant(Seat seat)
+    // {
+
+    //     var soldSeat = _lstSeat.FirstOrDefault(x => x.SeatId == seat.Id && x.SeatStatus == EntityStatus.SoldOut);
+    //     if (soldSeat != null)
+    //     {
+    //         return MudBlazor.Variant.Outlined;
+    //     }
+    //     else
+    //     {
+    //         var keptSeat = _lstBookingForCompare.Where(x => x.SeatId == seat.Id && x.SeatStatus == EntityStatus.YourSeat && x.CreatedTime != createdTime).OrderByDescending(x => x.ExpiredTime).FirstOrDefault();
+    //         if (keptSeat != null && keptSeat.ExpiredTime > createdTime)
+    //         {
+    //             return MudBlazor.Variant.Outlined;
+    //         }
+    //         else
+    //             return clickedSeats.Contains(seat) ? MudBlazor.Variant.Filled : MudBlazor.Variant.Outlined;
+    //     }
+
+    // }
+    // Color GetButtonColor(SeatDto seat)
+    // {
+
+    //     var soldSeat = _lstBookingForCompare.FirstOrDefault(x => x.SeatId == seat.Id && x.SeatStatus == EntityStatus.SoldOut);
+    //     if (soldSeat != null)
+    //     {
+
+    //         return Color.Error;
+    //     }
+    //     else
+    //     {
+    //         var keptSeat = _lstBookingForCompare.Where(x => x.SeatId == seat.Id && x.SeatStatus == EntityStatus.YourSeat && x.CreatedTime != createdTime).OrderByDescending(x => x.ExpiredTime).FirstOrDefault();
+    //         if (keptSeat != null && keptSeat.ExpiredTime > createdTime)
+    //         {
+
+    //             return Color.Primary;
+    //         }
+    //         else
+    //         {
+    //             if (seat.Type == EntityTypeSeat.vip)
+    //             {
+    //                 return clickedSeats.Contains(seat) ? Color.Success : Color.Warning;
+    //             }
+    //             else
+    //                 return clickedSeats.Contains(seat) ? Color.Success : Color.Tertiary;
+    //         }
+    //     }
+
+    // }
+    // async Task HandleSeatClick(SeatDto seat)
+    // {
+
+       
+    //     if (soldSeat != null) { return; }
+    //     else
+    //         if (keptSeat != null && keptSeat.ExpiredTime > createdTime) { return; }
+    //     else
+    //         if (_lstseatSelecteds.Count < 5)
+    //     {
+    //         if (clickedSeats.Contains(seat))
+    //         {
+    //             clickedSeats.Remove(seat);
+    //             _lstseatSelecteds.Remove(seat);
+    //             Total -= seat.Price;
+    //             await UpdateBookingSeat(seat, EntityStatus.Deleted);
+
+    //         }
+    //         else
+    //         {
+    //             clickedSeats.Add(seat);
+    //             _lstseatSelecteds.Add(seat);
+    //             Total += seat.Price;
+    //             await CreateBookingSeat(seat);
+    //         }
+    //     }
+        
+
+
+    // }
+}
+

@@ -1,0 +1,41 @@
+﻿@page "/counter"
+
+@inject ILocalStorageService LocalStorage
+
+<MudContainer>
+    <MudGrid>
+        <MudItem xs="12">
+            <MudTextField @bind-Value="cookieValue" Label="Nhập giá trị cookie" />
+            <MudButton OnClick="SetCookie" Color="Color.Primary">Lưu Cookie</MudButton>
+            <MudButton OnClick="GetCookie" Color="Color.Secondary">Đọc Cookie</MudButton>
+        </MudItem>
+
+        <MudItem xs="12">
+            <MudText Typo="Typo.h6">@result</MudText>
+        </MudItem>
+    </MudGrid>
+</MudContainer>
+
+@code {
+    private string cookieValue;
+    private string result;
+
+    private async Task SetCookie()
+    {
+        await LocalStorage.SetItemAsync("MyCookie", cookieValue);
+        result = "Cookie đã được lưu!";
+    }
+
+    private async Task GetCookie()
+    {
+        var value = await LocalStorage.GetItemAsync<string>("MyCookie");
+        if (value != null)
+        {
+            result = $"Giá trị cookie là: {value}";
+        }
+        else
+        {
+            result = "Cookie không tồn tại!";
+        }
+    }
+}

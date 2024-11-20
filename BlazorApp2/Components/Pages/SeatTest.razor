@@ -1,0 +1,156 @@
+﻿@page "/seat"
+@using Microsoft.AspNetCore.SignalR
+@using Microsoft.AspNetCore.SignalR.Client
+@using System.Text.Json
+@inject Blazored.LocalStorage.ILocalStorageService LocalStorage
+@inject ISeatRepo _seatRepo
+@inject IHubContext<SeatHub> _hubContext
+@inject NavigationManager Navigation
+
+<h3>Chọn Ghế</h3>
+
+<MudContainer>
+    <MudTextField @bind-Value="userName" Label="Name" Variant="Variant.Filled" />
+
+    <MudGrid>
+        @foreach (var seat in _lstSeat)
+        {
+            <MudItem xs="2" class="text-center">
+                <MudButton Color="GetSeatColor(seat)"
+                           OnClick="@(() => ToggleSeat(seat))">
+                    @seat.Code
+                </MudButton>
+            </MudItem>
+        }
+    </MudGrid>
+    <MudButton OnClick="Pay" Color="Color.Primary">Thanh Toán</MudButton>
+</MudContainer>
+
+@code {
+    private string userName;
+
+    private HashSet<string> selectedSeats = new HashSet<string>();
+    private HashSet<string> paidSeats = new HashSet<string>();
+    private List<Seat> _lstSeat = new();
+    private HubConnection hubConnection;
+    protected override async Task OnInitializedAsync()
+    {
+        await GetAllSeat();
+        // userName = Guid.NewGuid().ToString();
+        hubConnection = new HubConnectionBuilder()
+            .WithUrl(Navigation.ToAbsoluteUri("/seathub"))
+            .Build();
+        hubConnection.On<string, string, bool>("ReceiveSeatChange", (userName, seatId, isSelected) =>
+    {
+        if (isSelected)
+        {
+            selectedSeats.Add(seatId);
+        }
+        else
+        {
+            selectedSeats.Remove(seatId);
+        }
+
+        InvokeAsync(StateHasChanged);
+    });
+
+        await hubConnection.StartAsync();
+        // Đăng ký nhận thông báo từ SignalR
+        // await _hubContext.Clients.All.SendAsync("ReceiveSeatChange", "User", "InitialLoad", false);
+    }
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await LoadSeatsFromLocalStorage();
+            StateHasChanged(); 
+        }
+    }
+    private async Task LoadSeatsFromLocalStorage()
+    {
+        var selected = await LocalStorage.GetItemAsync<string>("selectedSeats");
+        if (!string.IsNullOrEmpty(selected))
+        {
+            selectedSeats = new HashSet<string>(selected.Split(','));
+        }
+
+        var paid = await LocalStorage.GetItemAsync<string>("paidSeats");
+        if (!string.IsNullOrEmpty(paid))
+        {
+            paidSeats = new HashSet<string>(paid.Split(','));
+        }
+    }
+
+    private async Task GetAllSeat()
+    {
+        _lstSeat = await _seatRepo.GetAllAsync();
+    }
+
+    private async Task ToggleSeat(Seat seat)
+    {
+        if (paidSeats.Contains(seat.Id.ToString()))
+        {
+            return; // Không cho phép chọn ghế đã thanh toán
+        }
+
+        if (selectedSeats.Contains(seat.Id.ToString()))
+        {
+            selectedSeats.Remove(seat.Id.ToString());
+            await _hubContext.Clients.All.SendAsync("ReceiveSeatChange", "User", seat.Id.ToString(), false);
+        }
+        else
+        {
+            selectedSeats.Add(seat.Id.ToString());
+            await _hubContext.Clients.All.SendAsync("ReceiveSeatChange", "User", seat.Id.ToString(), true);
+        }
+
+        await SaveSeatsToLocalStorage(); // Lưu lại sau mỗi lần thay đổi
+    }
+
+    private async Task Pay()
+    {
+        foreach (var seat in selectedSeats)
+        {
+            paidSeats.Add(seat);
+        }
+
+        selectedSeats.Clear(); // Xóa ghế đã chọn sau khi thanh toán
+        await SaveSeatsToLocalStorage(); // Lưu lại sau khi thanh toán
+    }
+
+    private async Task SaveSeatsToLocalStorage()
+    {
+        var expirationTime = DateTime.UtcNow.AddMinutes(1); // Set expiration time
+        var selectedSeatsData = new
+        {
+            Seats = selectedSeats,
+            ExpiresAt = expirationTime
+        };
+
+        var paidSeatsData = new
+        {
+            Seats = paidSeats,
+            ExpiresAt = expirationTime
+        };
+
+        // Save both the seats and expiration time
+        await LocalStorage.SetItemAsync("selectedSeats", JsonSerializer.Serialize(selectedSeatsData));
+        await LocalStorage.SetItemAsync("paidSeats", JsonSerializer.Serialize(paidSeatsData));
+    }
+
+    Color GetSeatColor(Seat seat)
+    {
+        if (paidSeats.Contains(seat.Id.ToString()))
+        {
+            return Color.Error; // Ghế đã thanh toán
+        }
+        else if (selectedSeats.Contains(seat.Id.ToString()))
+        {
+            return Color.Warning; // Ghế đang chọn
+        }
+        else
+        {
+            return Color.Success; // Ghế chưa chọn
+        }
+    }
+}
