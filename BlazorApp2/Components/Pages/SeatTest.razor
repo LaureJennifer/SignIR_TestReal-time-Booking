@@ -58,14 +58,14 @@
         // Đăng ký nhận thông báo từ SignalR
         // await _hubContext.Clients.All.SendAsync("ReceiveSeatChange", "User", "InitialLoad", false);
     }
-    protected override async Task OnAfterRenderAsync(bool firstRender)
-    {
-        if (firstRender)
-        {
-            await LoadSeatsFromLocalStorage();
-            StateHasChanged(); 
-        }
-    }
+    // protected override async Task OnAfterRenderAsync(bool firstRender)
+    // {
+    //     if (firstRender)
+    //     {
+    //         await LoadSeatsFromLocalStorage();
+    //         StateHasChanged(); 
+    //     }
+    // }
     private async Task LoadSeatsFromLocalStorage()
     {
         var selected = await LocalStorage.GetItemAsync<string>("selectedSeats");
@@ -104,7 +104,9 @@
             await _hubContext.Clients.All.SendAsync("ReceiveSeatChange", "User", seat.Id.ToString(), true);
         }
 
-        await SaveSeatsToLocalStorage(); // Lưu lại sau mỗi lần thay đổi
+        await SaveSeatsToLocalStorage();// Lưu lại sau mỗi lần thay đổi
+        await LoadSeatsFromLocalStorage();
+        StateHasChanged();
     }
 
     private async Task Pay()
